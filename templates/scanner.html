@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block subheading %}Analyse a link or an email — nothing is opened, everything is explained{% endblock %}
+{% block topbar_extra %}<span class="live">Protection active</span>{% endblock %}
+{% block content %}
+<div class="grid g4 mb">
+  <div class="card hover fade-up"><div class="stat"><div class="ico"><i class="bi bi-radar"></i></div><div><div class="lbl">Total scans</div><div class="val" id="sTotal" data-count="{{ o.total }}">0</div></div></div></div>
+  <div class="card hover fade-up"><div class="stat"><div class="ico c2"><i class="bi bi-shield-x"></i></div><div><div class="lbl">Threats caught</div><div class="val" data-count="{{ o.blocked }}">0</div></div></div></div>
+  <div class="card hover fade-up"><div class="stat"><div class="ico c5"><i class="bi bi-shield-check"></i></div><div><div class="lbl">Safe results</div><div class="val" data-count="{{ o.by_v.Safe }}">0</div></div></div></div>
+  <div class="card hover fade-up"><div class="stat"><div class="ico c3"><i class="bi bi-envelope-paper"></i></div><div><div class="lbl">Emails analysed</div><div class="val" data-count="{{ o.emails }}">0</div></div></div></div>
+</div>
+<div class="grid g2">
+  <div class="card glow fade-up">
+    <div class="tabs mb" id="tabs"><button class="active" data-t="url"><i class="bi bi-link-45deg"></i> URL</button><button data-t="email"><i class="bi bi-envelope"></i> Email</button></div>
+    <form id="urlForm">
+      <label>Suspicious link</label>
+      <div class="row"><div class="input-icon" style="flex:1"><i class="bi bi-globe"></i><input class="input" id="url" placeholder="https://example.com/login" autocomplete="off"></div>
+        <button class="btn btn-primary"><i class="bi bi-search"></i> Scan</button></div>
+      <div class="row mt small"><span class="muted">Try:</span>
+        {% for s in ['paypa1-secure-login.xyz/verify', 'http://192.168.10.5/hdfc/login.php', 'https://github.com', 'secure.microsoft.account-verify.support'] %}
+        <span class="chip sample">{{ s }}</span>{% endfor %}</div>
+    </form>
+    <form id="emailForm" style="display:none">
+      <div class="field"><label>From</label><input class="input" id="sender" placeholder='"Bank Support" &lt;alerts@bank-secure.com&gt;'></div>
+      <div class="field"><label>Subject</label><input class="input" id="subject" placeholder="Subject line"></div>
+      <div class="field"><label>Body</label><textarea id="body" rows="7" placeholder="Paste the full email text, including links…"></textarea></div>
+      <div class="row"><button class="btn btn-primary"><i class="bi bi-envelope-check"></i> Analyse email</button>
+        <button type="button" class="btn btn-ghost" id="sampleEmail"><i class="bi bi-magic"></i> Load sample phishing email</button></div>
+    </form>
+    <div class="divider"></div>
+    <h3><i class="bi bi-clock-history"></i> Recent scans</h3>
+    <div id="recent">{% for r in recent %}
+      <div class="list-item" style="padding:8px"><div class="dot-ico" style="{{ 'background:color-mix(in srgb,var(--danger) 18%,transparent);color:var(--danger)' if r.verdict == 'Dangerous' else ('background:color-mix(in srgb,var(--warning) 18%,transparent);color:var(--warning)' if r.verdict == 'Suspicious' else '') }}"><i class="bi {{ 'bi-envelope' if r.kind == 'email' else 'bi-link' }}"></i></div>
+        <div style="flex:1;min-width:0"><b class="small" style="word-break:break-all">{{ r.input[:60] }}</b><div class="muted small">{{ r.created_at }}</div></div>
+        <span class="badge {{ 'danger' if r.verdict == 'Dangerous' else ('warning' if r.verdict == 'Suspicious' else 'success') }}">{{ r.verdict }} · {{ r.score }}</span></div>
+    {% endfor %}</div>
+  </div>
+  <div class="card fade-up"><h3><i class="bi bi-clipboard2-pulse"></i> Analysis report</h3>
+    <div id="placeholder" class="empty"><i class="bi bi-shield-shaded"></i>Scan a URL or email to see a detailed, explainable risk report.</div>
+    {% include "_result.html" %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const tabs = document.getElementById('tabs');
+tabs.onclick = e => { const b = e.target.closest('button'); if (!b) return; tabs.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+  urlForm.style.display = b.dataset.t === 'url' ? '' : 'none'; emailForm.style.display = b.dataset.t === 'email' ? '' : 'none'; };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function run(fn, n) { placeholder.style.display = 'none'; showScanning(n); const [r] = await Promise.all([fn(), sleep(1300)]); showResult(r);
+  toast(`${r.verdict} — risk score ${r.score}/100`, r.verdict === 'Safe' ? 'success' : r.verdict === 'Suspicious' ? 'warning' : 'danger');
+  sTotal.textContent = +sTotal.textContent.replace(/,/g, '') + 1; }
+urlForm.onsubmit = e => { e.preventDefault(); if (url.value.trim()) run(() => api('/api/scan/url', {body: {url: url.value}}), 15); };
+emailForm.onsubmit = e => { e.preventDefault(); run(() => api('/api/scan/email', {body: {sender: sender.value, subject: subject.value, body: body.value}}), 8); };
+document.querySelectorAll('.sample').forEach(c => c.onclick = () => { url.value = c.textContent.trim(); urlForm.requestSubmit(); });
+sampleEmail.onclick = () => { sender.value = '"SBI Alerts" <noreply@sbi-kyc-alerts.top>'; subject.value = 'FINAL NOTICE: KYC pending — account will be blocked';
+  body.value = 'Dear Customer,\n\nYour SBI account will be suspended within 24 hours due to incomplete KYC. Verify your details IMMEDIATELY by entering your login details, OTP and PAN card number here:\nhttp://sbi-kyc-update.top/verify?redirect=http://onlinesbi.sbi\n\nDownload the attached form KYC_Form.html and submit.\n\nACT NOW to avoid penalty!!!\nSBI Security Team'; };
+document.querySelectorAll('.sample')[0] && setTimeout(() => { if (location.hash === '#demo') document.querySelectorAll('.sample')[0].click(); }, 600);
+</script>
+{% endblock %}

@@ -1,0 +1,46 @@
+<style>
+.gauge{position:relative;width:220px;height:130px;margin:0 auto}
+.gauge svg{width:100%;height:100%}
+.gauge .g-track{stroke:var(--input)}.gauge path{fill:none;stroke-width:18;stroke-linecap:round}
+.gauge .g-val{transition:stroke-dashoffset 1.4s cubic-bezier(.2,.8,.2,1),stroke .5s}
+.gauge .num{position:absolute;left:0;right:0;bottom:4px;text-align:center;font-size:42px;font-weight:700}
+.verdict{font-size:22px;font-weight:700;text-align:center;margin-top:6px}
+.check-row{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border-radius:12px;opacity:0;transform:translateX(-10px);animation:slideIn .45s forwards}
+.check-row:hover{background:var(--card-hover)}
+@keyframes slideIn{to{opacity:1;transform:none}}
+.check-row .ci{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex-shrink:0}
+.check-row.ok .ci{background:color-mix(in srgb,var(--success) 15%,transparent);color:var(--success)}
+.check-row.bad .ci{background:color-mix(in srgb,var(--danger) 15%,transparent);color:var(--danger)}
+.radar{width:220px;height:220px;border-radius:50%;margin:20px auto;position:relative;border:1px solid var(--border);
+  background:repeating-radial-gradient(circle,transparent 0 34px,var(--border) 35px 36px)}
+.radar::after{content:"";position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,color-mix(in srgb,var(--a1) 55%,transparent),transparent 30%);animation:spin 1.4s linear infinite}
+.radar span{position:absolute;width:8px;height:8px;border-radius:50%;background:var(--a1);box-shadow:0 0 12px var(--a1);animation:blink 1.2s infinite}
+</style>
+<div id="scanning" style="display:none" class="center"><div class="radar"><span style="top:30%;left:62%"></span><span style="top:64%;left:30%;animation-delay:.4s"></span></div>
+  <div class="muted">Running <b id="checkCount">15</b> security checks…</div></div>
+<div id="result" style="display:none">
+  <div class="gauge"><svg viewBox="0 0 220 130"><path class="g-track" d="M20 115 A90 90 0 0 1 200 115"/><path class="g-val" id="gVal" d="M20 115 A90 90 0 0 1 200 115"/></svg>
+    <div class="num" id="gNum">0</div></div>
+  <div class="verdict" id="verdict">—</div>
+  <div class="center muted small" id="host"></div>
+  <div class="divider"></div>
+  <div id="checks"></div>
+</div>
+<script>
+window.showResult = r => {
+  scanning.style.display = 'none'; result.style.display = 'block';
+  const col = r.verdict === 'Dangerous' ? 'var(--danger)' : r.verdict === 'Suspicious' ? 'var(--warning)' : 'var(--success)';
+  const p = document.getElementById('gVal'), L = p.getTotalLength(); p.style.strokeDasharray = L; p.style.strokeDashoffset = L; p.style.stroke = col;
+  requestAnimationFrame(() => setTimeout(() => p.style.strokeDashoffset = L * (1 - r.score / 100), 30));
+  countUp(gNum, r.score, {duration: 1300}); gNum.style.color = col;
+  const EM = {Dangerous: '🚨', Suspicious: '⚠️', Safe: '✅'};
+  verdict.innerHTML = `<span style="color:${col}">${EM[r.verdict]} ${r.verdict}</span>`;
+  host.textContent = r.domain ? `Registered domain: ${r.domain}` : '';
+  const sorted = [...r.checks].sort((a, b) => b.failed - a.failed || b.weight - a.weight);
+  checks.innerHTML = sorted.map((c, i) => `<div class="check-row ${c.failed ? 'bad' : 'ok'}" style="animation-delay:${i * 60}ms">
+    <div class="ci"><i class="bi ${c.failed ? 'bi-x-lg' : 'bi-check-lg'}"></i></div>
+    <div style="flex:1"><b class="small"><i class="bi ${c.icon}"></i> ${esc(c.name)}</b><div class="muted small">${esc(c.detail)}</div></div>
+    ${c.failed ? `<span class="badge danger">+${c.weight}</span>` : ''}</div>`).join('');
+};
+window.showScanning = n => { result.style.display = 'none'; scanning.style.display = 'block'; checkCount.textContent = n; };
+</script>

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block subheading %}Every scan you ran, with trends and full reports{% endblock %}
+{% block content %}
+<div class="grid g-2-1">
+  <div class="card fade-up"><h3><i class="bi bi-graph-up"></i> Threats vs safe — last 14 days</h3><div style="height:260px"><canvas id="trend"></canvas></div></div>
+  <div class="card fade-up"><h3><i class="bi bi-pie-chart"></i> Verdicts</h3><div style="height:260px"><canvas id="pie"></canvas></div></div>
+</div>
+<div class="card mt fade-up">
+  <div class="row between mb"><h3 style="margin:0"><i class="bi bi-list-check"></i> All scans</h3>
+    <div class="row" id="vf"><span class="chip active" data-v="">All</span><span class="chip" data-v="Dangerous">🚨 Dangerous</span><span class="chip" data-v="Suspicious">⚠️ Suspicious</span><span class="chip" data-v="Safe">✅ Safe</span></div></div>
+  <table class="table"><thead><tr><th>Type</th><th>Input</th><th>Score</th><th>Verdict</th><th>When</th><th></th></tr></thead><tbody id="rows">
+  {% for r in rows %}<tr data-v="{{ r.verdict }}" data-id="{{ r.id }}" data-text="{{ r.input|lower }}">
+    <td><i class="bi {{ 'bi-envelope' if r.kind == 'email' else 'bi-link-45deg' }}"></i> {{ r.kind|upper }}</td>
+    <td style="max-width:420px;word-break:break-all"><b class="small">{{ r.input[:90] }}</b></td>
+    <td><div class="progress" style="width:110px"><span data-w="{{ r.score }}" style="background:{{ 'var(--danger)' if r.verdict == 'Dangerous' else ('var(--warning)' if r.verdict == 'Suspicious' else 'var(--success)') }}"></span></div><span class="small muted">{{ r.score }}/100</span></td>
+    <td><span class="badge {{ 'danger' if r.verdict == 'Dangerous' else ('warning' if r.verdict == 'Suspicious' else 'success') }}">{{ r.verdict }}</span></td>
+    <td class="muted small">{{ r.created_at }}</td>
+    <td class="row" style="flex-wrap:nowrap"><button class="btn btn-sm btn-ghost view"><i class="bi bi-eye"></i></button><button class="btn btn-sm btn-ghost del"><i class="bi bi-trash"></i></button></td></tr>{% endfor %}
+  </tbody></table>
+</div>
+<div class="modal" id="rep"><div class="box"><h3>Scan report <button class="icon-btn" data-close><i class="bi bi-x-lg"></i></button></h3>
+  {% include "_result.html" %}</div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+const O = {{ o|tojson }}; let ch = [];
+function draw() { ch.forEach(c => c.destroy()); applyChartDefaults(); const c = chartColors(), ctx = document.getElementById('trend').getContext('2d');
+  ch.push(new Chart(ctx, {type: 'line', data: {labels: O.trend.labels, datasets: [{label: 'Threats', data: O.trend.threats, borderColor: '#FF5470', backgroundColor: gradientFill(ctx, '#FF5470'), fill: true, tension: .4},
+    {label: 'Safe', data: O.trend.safe, borderColor: c.a1, backgroundColor: gradientFill(ctx, c.a1), fill: true, tension: .4}]}, options: {maintainAspectRatio: false}}));
+  ch.push(new Chart(document.getElementById('pie'), {type: 'doughnut', data: {labels: Object.keys(O.by_v), datasets: [{data: Object.values(O.by_v), backgroundColor: ['#00F5A0', '#F7B32B', '#FF5470'], borderWidth: 0}]},
+    options: {maintainAspectRatio: false, cutout: '65%', plugins: {legend: {position: 'bottom'}}}})); }
+draw(); addEventListener('themechange', draw);
+let vf = '', q = '';
+const filt = () => document.querySelectorAll('#rows tr').forEach(r => r.style.display = (!vf || r.dataset.v === vf) && (!q || r.dataset.text.includes(q)) ? '' : 'none');
+document.getElementById('vf').onclick = e => { const c = e.target.closest('.chip'); if (!c) return; document.querySelectorAll('#vf .chip').forEach(x => x.classList.toggle('active', x === c)); vf = c.dataset.v; filt(); };
+globalSearch.oninput = e => { q = e.target.value.toLowerCase(); filt(); };
+document.getElementById('rows').onclick = async e => { const tr = e.target.closest('tr');
+  if (e.target.closest('.view')) { rep.classList.add('open'); showResult(await api('/api/scan/' + tr.dataset.id)); }
+  if (e.target.closest('.del')) { await api('/api/scan/' + tr.dataset.id, {method: 'DELETE'}); tr.style.opacity = 0; setTimeout(() => tr.remove(), 300); toast('Scan removed', 'info'); } };
+</script>
+{% endblock %}
